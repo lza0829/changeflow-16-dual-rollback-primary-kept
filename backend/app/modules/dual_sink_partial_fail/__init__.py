@@ -81,8 +81,8 @@ def should_fail_shadow(seq: int, failure_seqs: Iterable[int]) -> bool:
 
 
 def rollback_mode(policy: str) -> bool:
-    normalize_policy(policy)
-    return False
+    """该策略下旁路失败是否要连主 Sink 一起回滚（两侧回滚）。"""
+    return normalize_policy(policy) == POLICY_ROLLBACK_BOTH
 
 
 def cursor_policy_text(policy: str, halted_at_seq: int | None) -> str:

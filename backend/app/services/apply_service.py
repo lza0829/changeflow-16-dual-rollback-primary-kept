@@ -165,8 +165,12 @@ def run_apply(stream_id: int) -> dict[str, Any]:
                     raise dual.ShadowSinkError(str(exc)) from exc
             except dual.ShadowSinkError as exc:
                 # 撤销旁路的半写，再按策略决定主 Sink 的去留。
+                # 必须先 ROLLBACK TO 把旁路的半写真的撤掉；只 RELEASE 会把半写合并进外层。
+                conn.execute("ROLLBACK TO SAVEPOINT dual_shadow")
                 conn.execute("RELEASE SAVEPOINT dual_shadow")
-                if dual_policy == dual.POLICY_ROLLBACK_BOTH:
+                if dual.rollback_mode(dual_policy):
+                    # 两侧回滚：连同 dual_event 圈住的主 Sink 写入一起撤销。
+                    conn.execute("ROLLBACK TO SAVEPOINT dual_event")
                     conn.execute("RELEASE SAVEPOINT dual_event")
                     dual_write_repo.record_attempt(
                         conn,

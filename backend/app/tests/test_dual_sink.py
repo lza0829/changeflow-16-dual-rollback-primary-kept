@@ -95,6 +95,13 @@ def test_rollback_both_keeps_cursor_and_retry_catches_up(app_env):
     try:
         assert conn.execute("SELECT COUNT(*) c FROM sink_records").fetchone()["c"] == 1
         assert conn.execute("SELECT COUNT(*) c FROM sink_shadow_records").fetchone()["c"] == 1
+        # 失败 seq 两侧都不得留半写：主侧 seq 3 的 INV-2002 不出现，旁路同样。
+        assert conn.execute(
+            "SELECT COUNT(*) c FROM sink_records WHERE last_seq=3"
+        ).fetchone()["c"] == 0
+        assert conn.execute(
+            "SELECT COUNT(*) c FROM sink_shadow_records WHERE last_seq=3"
+        ).fetchone()["c"] == 0
         assert conn.execute("SELECT COUNT(*) c FROM quarantine").fetchone()["c"] == 0
     finally:
         conn.close()
@@ -112,3 +119,10 @@ def test_policy_rejects_unknown_value():
 
     with pytest.raises(ValueError):
         dual.normalize_policy("loose")
+
+
+def test_rollback_mode_only_for_rollback_both():
+    from app.modules import dual_sink_partial_fail as dual
+
+    assert dual.rollback_mode("rollback_both") is True
+    assert dual.rollback_mode("main_commit_isolate_shadow") is False
